@@ -26,7 +26,7 @@ body {
     line-height: 1.6;
 }
 
-/* Header */
+/* Header Styles */
 header {
     background: linear-gradient(to right, #0071e3, #00a1e4);
     color: white;
@@ -46,7 +46,7 @@ h1 {
     margin-bottom: 0.5rem;
 }
 
-/* YouTube-style Auth Styles */
+/* Authentication Styles */
 .auth-container {
     position: absolute;
     top: 20px;
@@ -418,6 +418,30 @@ h1 {
     color: var(--apple-blue);
 }
 
+.wh-answers {
+    list-style-type: none;
+    padding-left: 0;
+    margin-bottom: 1rem;
+}
+
+.wh-answers li {
+    padding: 0.5rem 0;
+    border-bottom: 1px dashed var(--apple-light-gray);
+    position: relative;
+    padding-left: 1.5rem;
+}
+
+.wh-answers li:before {
+    content: "•";
+    color: var(--apple-blue);
+    position: absolute;
+    left: 0;
+}
+
+.wh-answers li:last-child {
+    border-bottom: none;
+}
+
 .wh-answer {
     font-size: 0.95rem;
     line-height: 1.5;
@@ -475,6 +499,20 @@ h1 {
     text-align: center;
     padding: 2rem;
     color: var(--error-red);
+}
+
+.error-state button {
+    background-color: var(--apple-blue);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    margin-top: 1rem;
+    cursor: pointer;
+}
+
+.error-state button:hover {
+    background-color: #0060c0;
 }
 
 /* Loading Skeletons */

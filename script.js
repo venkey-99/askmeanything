@@ -16,6 +16,20 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const provider = new firebase.auth.GoogleAuthProvider();
 
+// API Configuration
+const CONFIG = {
+    wikipedia: {
+        endpoint: 'https://en.wikipedia.org/api/rest_v1/page/summary/'
+    },
+    openai: {
+        endpoint: 'https://api.openai.com/v1/chat/completions',
+        apiKey: 'sk-your-openai-api-key-here', // Replace with your actual key
+        model: 'gpt-3.5-turbo',
+        maxTokens: 500
+    },
+    rateLimit: 2000 // 2 seconds between API calls
+};
+
 // DOM Elements
 const elements = {
     // Auth Elements
@@ -51,6 +65,7 @@ const elements = {
 // App State
 let searchHistory = [];
 let currentUser = null;
+let lastSearchTime = 0;
 
 // Initialize App
 function init() {
@@ -79,11 +94,11 @@ function showUserProfile(user) {
     // Update avatar button
     if (user.photoURL) {
         elements.authBtnContent.innerHTML = `
-            <img src="${user.photoURL}" class="user-avatar-img" alt="Profile" style="width:32px;height:32px;border-radius:50%;">
+            <img src="${user.photoURL}" class="user-avatar-img" alt="Profile">
         `;
     } else {
         elements.authBtnContent.innerHTML = `
-            <div class="avatar-placeholder" style="width:32px;height:32px;border-radius:50%;background-color:${stringToColor(user.email)};color:white;display:flex;align-items:center;justify-content:center;">
+            <div class="avatar-placeholder" style="background-color:${stringToColor(user.email)}">
                 ${user.email.charAt(0).toUpperCase()}
             </div>
         `;
@@ -330,16 +345,169 @@ async function performSearch() {
     const query = elements.searchInput.value.trim();
     if (!query) return;
 
+    // Rate limiting
+    const now = Date.now();
+    if (now - lastSearchTime < CONFIG.rateLimit) {
+        showError("Please wait a moment before searching again");
+        return;
+    }
+    lastSearchTime = now;
+
     updateSearchHistory(query);
     showLoadingState(query);
 
     try {
-        // Your existing search implementation
-        // ...
+        // Try Wikipedia first
+        const wikiData = await fetchWikipediaData(query);
+        
+        if (wikiData) {
+            displayResults(query, formatWikipediaAnswers(wikiData));
+            return;
+        }
+        
+        // Fallback to OpenAI
+        const aiAnswers = await fetchOpenAIAnswers(query);
+        displayResults(query, aiAnswers);
+        
     } catch (error) {
         console.error("Search error:", error);
         showError("Failed to get answers. Please try again.");
     }
+}
+
+async function fetchWikipediaData(query) {
+    try {
+        const response = await fetch(`${CONFIG.wikipedia.endpoint}${encodeURIComponent(query)}`);
+        if (!response.ok) throw new Error("Wikipedia API error");
+        return await response.json();
+    } catch (error) {
+        console.warn("Wikipedia fetch failed:", error);
+        return null;
+    }
+}
+
+async function fetchOpenAIAnswers(query) {
+    const prompt = `Provide detailed answers about "${query}" in this JSON format with at least 3 points for each WH-question: 
+    {
+        "Who": ["point 1", "point 2", "point 3"],
+        "What": ["point 1", "point 2", "point 3"],
+        "When": ["point 1", "point 2", "point 3"],
+        "Where": ["point 1", "point 2", "point 3"],
+        "Why": ["point 1", "point 2", "point 3"],
+        "How": ["point 1", "point 2", "point 3"]
+    }
+    Keep each point concise (under 15 words).`;
+
+    try {
+        const response = await fetch(CONFIG.openai.endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${CONFIG.openai.apiKey}`
+            },
+            body: JSON.stringify({
+                model: CONFIG.openai.model,
+                messages: [{ role: "user", content: prompt }],
+                response_format: { type: "json_object" },
+                max_tokens: CONFIG.openai.maxTokens
+            })
+        });
+
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
+        
+        const data = await response.json();
+        return JSON.parse(data.choices[0].message.content);
+    } catch (error) {
+        console.error("OpenAI error:", error);
+        throw error;
+    }
+}
+
+function formatWikipediaAnswers(data) {
+    return {
+        "Who": data.extract ? extractPeople(data.extract) : "Various experts and individuals",
+        "What": data.description || data.extract?.split('\n')[0] || "Information not available",
+        "When": data.timestamp ? `First recorded: ${new Date(data.timestamp).toLocaleDateString()}` : "Timeline varies",
+        "Where": data.coordinates ? `Located at ${data.coordinates.lat}, ${data.coordinates.lon}` : "Multiple locations",
+        "Why": data.extract ? `Significance: ${data.extract.split('.')[0]}` : "Important for various reasons",
+        "How": data.extract ? `Process: ${data.extract.split('. ').slice(0, 2).join('. ')}` : "Through complex systems"
+    };
+}
+
+function extractPeople(text) {
+    const names = text.match(/[A-Z][a-z]+ [A-Z][a-z]+/g) || [];
+    return names.slice(0, 3).join(', ') || "Various experts";
+}
+
+function displayResults(query, answers) {
+    elements.whGrid.innerHTML = '';
+    
+    const questionTypes = ["Who", "What", "When", "Where", "Why", "How"];
+    
+    questionTypes.forEach((type, index) => {
+        const block = document.createElement('div');
+        block.className = 'wh-block';
+        
+        const answerContent = Array.isArray(answers[type]) 
+            ? `<ul class="wh-answers">${answers[type].map(point => `<li>${point}</li>`).join('')}</ul>`
+            : `<p class="wh-answer">${answers[type] || `No ${type.toLowerCase()} information available`}</p>`;
+        
+        block.innerHTML = `
+            <div class="wh-content">
+                <h3 class="wh-title">${type}</h3>
+                ${answerContent}
+            </div>
+            <div class="wh-footer">
+                <button class="more-btn"><i class="fas fa-info-circle"></i> Details</button>
+                <button class="copy-btn"><i class="far fa-copy"></i> Copy</button>
+            </div>
+        `;
+        
+        elements.whGrid.appendChild(block);
+        
+        setTimeout(() => {
+            block.classList.add('visible');
+        }, 100 * index);
+        
+        // Add event listeners
+        block.querySelector('.more-btn').addEventListener('click', () => {
+            alert(`${type}:\n\n${answers[type]}`);
+        });
+        
+        block.querySelector('.copy-btn').addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(`${type}: ${answers[type]}`);
+                const btn = block.querySelector('.copy-btn');
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="far fa-copy"></i> Copy';
+                    btn.classList.remove('copied');
+                }, 2000);
+            } catch {
+                alert("Failed to copy");
+            }
+        });
+    });
+}
+
+function showLoadingState(query) {
+    elements.whGrid.innerHTML = `
+        <div class="loading-state">
+            <i class="fas fa-spinner fa-spin"></i>
+            <h2>Finding answers about "${query}"</h2>
+        </div>
+    `;
+}
+
+function showError(message) {
+    elements.whGrid.innerHTML = `
+        <div class="error-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h2>${message}</h2>
+            <button onclick="performSearch()">Try Again</button>
+        </div>
+    `;
 }
 
 // Event Listeners
@@ -391,3 +559,6 @@ function setupEventListeners() {
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', init);
+
+// Make performSearch available globally for retry button
+window.performSearch = performSearch;
