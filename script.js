@@ -38,6 +38,20 @@ document.addEventListener('DOMContentLoaded', function() {
 async function performSearch() {
     const query = searchInput.value.trim();
     if (!query) return;
+    async function performSearch() {
+    const query = searchInput.value.trim();
+    if (!query) return;
+    
+    // Add rate limiting (add these lines)
+    const now = Date.now();
+    if (lastSearchTime && now - lastSearchTime < 2000) {
+        showError("Please wait a moment before searching again");
+        return;
+    }
+    lastSearchTime = now;
+    
+    // Rest of your function...
+}
 
     showLoadingState(query);
     
