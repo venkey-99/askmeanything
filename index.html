@@ -15,18 +15,21 @@
         </div>
     </header>
     
-    <div class="search-container">
-        <input type="text" id="search-input" placeholder="Ask anything (e.g., climate change, quantum computing)" autofocus>
-        <button id="search-button"><i class="fas fa-search"></i> Search</button>
-    </div>
-    
-    <div class="wh-grid" id="wh-grid">
-        <div class="initial-state">
-            <i class="fas fa-question-circle"></i>
-            <h2>Explore WH-questions</h2>
-            <p>Enter a topic to see comprehensive answers</p>
+    <main>
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Ask anything (e.g., climate change, quantum computing)" autofocus>
+            <button id="search-button"><i class="fas fa-search"></i> Search</button>
+            <div id="search-history"></div>
         </div>
-    </div>
+        
+        <div class="wh-grid" id="wh-grid">
+            <div class="initial-state">
+                <i class="fas fa-question-circle"></i>
+                <h2>Explore WH-questions</h2>
+                <p>Enter a topic to see comprehensive answers</p>
+            </div>
+        </div>
+    </main>
     
     <footer>
         <p>&copy; <span id="current-year"></span> Ask Me WH Explorer. All rights reserved.</p>

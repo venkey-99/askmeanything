@@ -5,51 +5,92 @@ const CONFIG = {
     },
     openai: {
         endpoint: 'https://api.openai.com/v1/chat/completions',
-        apiKey: 'sk-your-openai-api-key-here', // Replace with your actual key
-        model: 'gpt-3.5-turbo'
+        apiKey: 'sk-proj-abc123...xyz', // Your real key
+        model: 'gpt-3.5-turbo',
+        maxTokens: 150
     },
-    rateLimit: 2000 // 2 seconds between API calls
+    rateLimit: 2000 // 2 seconds
 };
 
 // DOM Elements
-const searchInput = document.getElementById('search-input');
-const searchButton = document.getElementById('search-button');
-const whGrid = document.getElementById('wh-grid');
+const elements = {
+    searchInput: document.getElementById('search-input'),
+    searchButton: document.getElementById('search-button'),
+    whGrid: document.getElementById('wh-grid'),
+    searchHistory: document.getElementById('search-history'),
+    currentYear: document.getElementById('current-year')
+};
+
+// State
+let lastSearchTime = 0;
+const searchHistory = JSON.parse(localStorage.getItem('whSearchHistory')) || [];
 
 // Initialize
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('current-year').textContent = new Date().getFullYear();
+document.addEventListener('DOMContentLoaded', init);
+
+function init() {
+    elements.currentYear.textContent = new Date().getFullYear();
+    updateSearchHistoryUI();
     
-    // Event listeners
-    searchInput.addEventListener('keypress', function(e) {
+    // Event Listeners
+    elements.searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') performSearch();
     });
-    searchButton.addEventListener('click', performSearch);
-});
+    
+    elements.searchButton.addEventListener('click', performSearch);
+}
 
 async function performSearch() {
-    const query = searchInput.value.trim();
+    const query = elements.searchInput.value.trim();
     if (!query) return;
 
+    // Rate limiting
+    const now = Date.now();
+    if (now - lastSearchTime < CONFIG.rateLimit) {
+        showError("Please wait a moment before searching again");
+        return;
+    }
+    lastSearchTime = now;
+
+    // Update history
+    updateSearchHistory(query);
     showLoadingState(query);
-    
+
     try {
-        // Try Wikipedia first
         const wikiData = await fetchWikipediaData(query);
+        if (wikiData) return displayResults(query, formatWikipediaAnswers(wikiData));
         
-        if (wikiData) {
-            displayResults(query, formatWikipediaAnswers(wikiData));
-            return;
-        }
-        
-        // Fallback to OpenAI
         const aiAnswers = await fetchOpenAIAnswers(query);
         displayResults(query, aiAnswers);
-        
     } catch (error) {
-        showError("Failed to get answers. Please try again.");
         console.error("Search error:", error);
+        showError("Failed to get answers. Please try again.");
     }
+}
+
+function updateSearchHistory(query) {
+    if (!searchHistory.includes(query.toLowerCase())) {
+        searchHistory.unshift(query);
+        if (searchHistory.length > 5) searchHistory.pop();
+        localStorage.setItem('whSearchHistory', JSON.stringify(searchHistory));
+        updateSearchHistoryUI();
+    }
+}
+
+function updateSearchHistoryUI() {
+    elements.searchHistory.innerHTML = searchHistory.map(term => `
+        <div class="history-item">
+            <i class="fas fa-history"></i> ${term}
+        </div>
+    `).join('');
+    
+    // Add click handlers
+    document.querySelectorAll('.history-item').forEach(item => {
+        item.addEventListener('click', () => {
+            elements.searchInput.value = item.textContent.trim();
+            performSearch();
+        });
+    });
 }
 
 async function fetchWikipediaData(query) {
@@ -64,118 +105,134 @@ async function fetchWikipediaData(query) {
 }
 
 async function fetchOpenAIAnswers(query) {
-    const prompt = `Provide concise answers (1-2 sentences) to WH-questions about ${query}. 
-    Format as JSON with these exact keys: Who, What, When, Where, Why, Which, Whose, Whom, How.`;
-    
-    const response = await fetch(CONFIG.openai.endpoint, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${CONFIG.openai.apiKey}`
-        },
-        body: JSON.stringify({
-            model: CONFIG.openai.model,
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" }
-        })
-    });
-    
-    if (!response.ok) throw new Error("OpenAI API error");
-    const data = await response.json();
-    
+    if (!CONFIG.openai.apiKey) {
+        throw new Error("OpenAI API key not configured");
+    }
+
+    const prompt = `Provide concise answers about ${query} in this JSON format: 
+    {"Who":"...","What":"...","When":"...","Where":"...","Why":"...","How":"..."}
+    Keep answers under 2 sentences each.`;
+
     try {
+        const response = await fetch(CONFIG.openai.endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${CONFIG.openai.apiKey}`
+            },
+            body: JSON.stringify({
+                model: CONFIG.openai.model,
+                messages: [{ role: "user", content: prompt }],
+                response_format: { type: "json_object" },
+                max_tokens: CONFIG.openai.maxTokens
+            })
+        });
+
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
+        
+        const data = await response.json();
         return JSON.parse(data.choices[0].message.content);
-    } catch {
-        throw new Error("Failed to parse AI response");
+    } catch (error) {
+        console.error("OpenAI error:", error);
+        throw error;
     }
 }
 
 function formatWikipediaAnswers(data) {
     return {
-        "Who": data.extract ? extractPeople(data.extract) : "Various experts and individuals",
-        "What": data.description || data.extract?.split('\n')[0] || "Information not available",
-        "When": data.timestamp ? `First recorded: ${new Date(data.timestamp).toLocaleDateString()}` : "Timeline varies",
-        "Where": data.coordinates ? `Located at ${data.coordinates.lat}, ${data.coordinates.lon}` : "Multiple locations",
-        "Why": data.extract ? `Significance: ${data.extract.split('.')[0]}` : "Important for various reasons",
-        "Which": data.titles?.canonical || "Various categories",
-        "Whose": "Shared responsibility",
-        "Whom": "Affects various stakeholders",
-        "How": data.extract ? `Process: ${data.extract.split('. ').slice(0, 2).join('. ')}` : "Through complex systems"
+        "Who": data.extract ? extractPeople(data.extract) : "Various experts",
+        "What": data.description || data.extract?.split('\n')[0] || "Not available",
+        "When": data.timestamp ? new Date(data.timestamp).toLocaleDateString() : "Unknown date",
+        "Where": data.coordinates ? `${data.coordinates.lat}, ${data.coordinates.lon}` : "Various locations",
+        "Why": data.extract ? `Because ${data.extract.split('.')[0]}` : "Multiple reasons",
+        "How": data.extract ? `Process: ${data.extract.split('. ')[0]}` : "Complex process"
     };
 }
 
 function extractPeople(text) {
     const names = text.match(/[A-Z][a-z]+ [A-Z][a-z]+/g) || [];
-    return names.slice(0, 3).join(', ') || "Various experts";
+    return names.slice(0, 3).join(', ') || "Various people";
 }
 
 function displayResults(query, answers) {
-    whGrid.innerHTML = '';
+    elements.whGrid.innerHTML = '';
     
-    const questionTypes = ["Who", "What", "When", "Where", "Why", "Which", "Whose", "Whom", "How"];
-    
-    questionTypes.forEach((type, index) => {
+    Object.entries(answers).forEach(([type, answer], index) => {
         const block = document.createElement('div');
         block.className = 'wh-block';
-        
         block.innerHTML = `
             <div class="wh-content">
                 <h3 class="wh-title">${type}</h3>
-                <p class="wh-answer">${answers[type] || `No ${type.toLowerCase()} information available`}</p>
+                <p class="wh-answer">${answer || `No ${type.toLowerCase()} info`}</p>
             </div>
             <div class="wh-footer">
-                <button class="more-btn">More info</button>
-                <button class="copy-btn">Copy</button>
+                <button class="more-btn"><i class="fas fa-info-circle"></i> Details</button>
+                <button class="copy-btn"><i class="far fa-copy"></i> Copy</button>
             </div>
         `;
+        elements.whGrid.appendChild(block);
         
-        whGrid.appendChild(block);
+        // Animate in
+        setTimeout(() => block.classList.add('visible'), 100 * index);
         
-        setTimeout(() => {
-            block.classList.add('visible');
-        }, 100 * index);
-    });
-    
-    // Add event listeners
-    document.querySelectorAll('.more-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const answer = this.closest('.wh-block').querySelector('.wh-answer').textContent;
-            alert(`Detailed information:\n\n${answer}`);
+        // Add button handlers
+        block.querySelector('.more-btn').addEventListener('click', () => {
+            alert(`${type}:\n\n${answer}`);
         });
-    });
-    
-    document.querySelectorAll('.copy-btn').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            const answer = this.closest('.wh-block').querySelector('.wh-answer').textContent;
+        
+        block.querySelector('.copy-btn').addEventListener('click', async () => {
             try {
-                await navigator.clipboard.writeText(answer);
-                this.textContent = 'Copied!';
-                this.classList.add('copied');
+                await navigator.clipboard.writeText(`${type}: ${answer}`);
+                const btn = block.querySelector('.copy-btn');
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.classList.add('copied');
                 setTimeout(() => {
-                    this.textContent = 'Copy';
-                    this.classList.remove('copied');
+                    btn.innerHTML = '<i class="far fa-copy"></i> Copy';
+                    btn.classList.remove('copied');
                 }, 2000);
             } catch {
-                this.textContent = 'Error';
+                alert("Failed to copy");
             }
         });
     });
 }
 
 function showLoadingState(query) {
-    whGrid.innerHTML = `
-        <div class="loading-state">
-            <i class="fas fa-spinner fa-spin"></i>
-            <h2>Finding answers about "${query}"</h2>
+    elements.whGrid.innerHTML = '';
+    
+    // Create skeleton blocks
+    for (let i = 0; i < 6; i++) {
+        const block = document.createElement('div');
+        block.className = 'wh-block visible';
+        block.innerHTML = `
+            <div class="wh-content">
+                <h3 class="wh-title skeleton skeleton-title"></h3>
+                <p class="wh-answer skeleton skeleton-block"></p>
+                <p class="wh-answer skeleton skeleton-block"></p>
+            </div>
+        `;
+        elements.whGrid.appendChild(block);
+    }
+    
+    // Add loading message
+    const loadingMsg = document.createElement('div');
+    loadingMsg.className = 'loading-state';
+    loadingMsg.innerHTML = `
+        <i class="fas fa-spinner fa-spin"></i>
+        <h2>Finding answers about "${query}"</h2>
+    `;
+    elements.whGrid.appendChild(loadingMsg);
+}
+
+function showError(message) {
+    elements.whGrid.innerHTML = `
+        <div class="error-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h2>${message}</h2>
+            <button onclick="performSearch()">Try Again</button>
         </div>
     `;
 }
 
-function showError(message) {
-    whGrid.innerHTML = `
-        <div class="error-state">
-            <i class="fas fa-exclamation-triangle"></i>
-            <h2>${message}</h2>
-        </div>
-    `;
-}
+// Make performSearch available globally for retry button
+window.performSearch = performSearch;
