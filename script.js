@@ -1,11 +1,8 @@
-// Firebase Configuration (Replace with your actual config)
+// Firebase Configuration
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyB_AZocz9fEjiDdg7qSdcrVazYgNSHwYUg",
+    authDomain: "askmewhexplorer.firebaseapp.com",
+    // ... get actual values from your Firebase console
 };
 
 // Initialize Firebase
@@ -14,32 +11,23 @@ if (!firebase.apps.length) {
 }
 const auth = firebase.auth();
 const db = firebase.firestore();
-const provider = new firebase.auth.GoogleAuthProvider();
+
+// API Configuration
+const CONFIG = {
+    wikipedia: {
+        endpoint: 'https://en.wikipedia.org/api/rest_v1/page/summary/'
+    },
+    openai: {
+        endpoint: 'https://api.openai.com/v1/chat/completions',
+        apiKey: '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', // REPLACE WITH YOUR KEY
+        model: 'gpt-3.5-turbo',
+        maxTokens: 500
+    },
+    rateLimit: 2000 // 2 seconds between API calls
+};
 
 // DOM Elements
 const elements = {
-    // Auth Elements
-    authBtn: document.getElementById('auth-btn'),
-    authDropdown: document.getElementById('auth-dropdown'),
-    authBtnContent: document.getElementById('auth-btn-content'),
-    preLogin: document.getElementById('pre-login'),
-    signupForm: document.getElementById('signup-form'),
-    postLogin: document.getElementById('post-login'),
-    googleLogin: document.getElementById('google-login'),
-    emailLogin: document.getElementById('email-login'),
-    doSignup: document.getElementById('do-signup'),
-    signoutBtn: document.getElementById('signout-btn'),
-    signupToggle: document.getElementById('signup-toggle'),
-    loginToggle: document.getElementById('login-toggle'),
-    usernameDisplay: document.getElementById('username-display'),
-    userEmail: document.getElementById('user-email'),
-    authEmail: document.getElementById('auth-email'),
-    authPassword: document.getElementById('auth-password'),
-    signupName: document.getElementById('signup-name'),
-    signupEmail: document.getElementById('signup-email'),
-    signupPassword: document.getElementById('signup-password'),
-    
-    // Search Elements
     searchInput: document.getElementById('search-input'),
     searchButton: document.getElementById('search-button'),
     whGrid: document.getElementById('wh-grid'),
@@ -50,186 +38,170 @@ const elements = {
 
 // App State
 let searchHistory = [];
-let currentUser = null;
+let lastSearchTime = 0;
 
 // Initialize App
 function init() {
     elements.currentYear.textContent = new Date().getFullYear();
-    setupEventListeners();
-    initFirebaseAuth();
+    
+    // Event Listeners
+    elements.searchButton.addEventListener('click', performSearch);
+    elements.searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+    });
+    
+    // Load any existing history
+    loadLocalHistory();
 }
 
-// Firebase Auth
-function initFirebaseAuth() {
-    auth.onAuthStateChanged(user => {
-        currentUser = user;
-        if (user) {
-            // User signed in
-            showUserProfile(user);
-            loadUserHistory(user.uid);
-        } else {
-            // User signed out
-            showAuthForm();
-            loadLocalHistory();
+// Search Functionality
+async function performSearch() {
+    const query = elements.searchInput.value.trim();
+    if (!query) return;
+
+    // Rate limiting
+    const now = Date.now();
+    if (now - lastSearchTime < CONFIG.rateLimit) {
+        showError("Please wait a moment before searching again");
+        return;
+    }
+    lastSearchTime = now;
+
+    // Update history
+    updateSearchHistory(query);
+    showLoadingState(query);
+
+    try {
+        // Try Wikipedia first
+        const wikiData = await fetchWikipediaData(query);
+        
+        if (wikiData && wikiData.extract) {
+            displayResults(query, formatWikipediaAnswers(wikiData));
+            return;
         }
+        
+        // Fallback to OpenAI
+        const aiAnswers = await fetchOpenAIAnswers(query);
+        displayResults(query, aiAnswers);
+        
+    } catch (error) {
+        console.error("Search error:", error);
+        showError("Failed to get answers. Please try again.");
+    }
+}
+
+// Wikipedia API
+async function fetchWikipediaData(query) {
+    try {
+        const response = await fetch(`${CONFIG.wikipedia.endpoint}${encodeURIComponent(query)}`);
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        console.warn("Wikipedia fetch failed:", error);
+        return null;
+    }
+}
+
+// OpenAI API
+async function fetchOpenAIAnswers(query) {
+    if (!CONFIG.openai.apiKey) {
+        throw new Error("OpenAI API key not configured");
+    }
+
+    const prompt = `Provide detailed answers about "${query}" in JSON format with these keys: 
+    Who, What, When, Where, Why, How. Keep each answer concise (1-2 sentences).`;
+
+    try {
+        const response = await fetch(CONFIG.openai.endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${CONFIG.openai.apiKey}`
+            },
+            body: JSON.stringify({
+                model: CONFIG.openai.model,
+                messages: [{ role: "user", content: prompt }],
+                response_format: { type: "json_object" },
+                max_tokens: CONFIG.openai.maxTokens
+            })
+        });
+
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
+        const data = await response.json();
+        return JSON.parse(data.choices[0].message.content);
+    } catch (error) {
+        console.error("OpenAI error:", error);
+        throw error;
+    }
+}
+
+// Format Wikipedia Answers
+function formatWikipediaAnswers(data) {
+    return {
+        "Who": data.extract ? extractPeople(data.extract) : "Various people involved",
+        "What": data.description || data.extract?.split('\n')[0] || "Information not available",
+        "When": data.timestamp ? new Date(data.timestamp).toLocaleDateString() : "Various time periods",
+        "Where": data.coordinates ? `${data.coordinates.lat}, ${data.coordinates.lon}` : "Multiple locations",
+        "Why": data.extract ? `Because ${data.extract.split('.')[0]}` : "Multiple reasons",
+        "How": data.extract ? `Process: ${data.extract.split('. ')[0]}` : "Complex process"
+    };
+}
+
+function extractPeople(text) {
+    const names = text.match(/[A-Z][a-z]+ [A-Z][a-z]+/g) || [];
+    return names.slice(0, 3).join(', ') || "Various people";
+}
+
+// Display Results
+function displayResults(query, answers) {
+    elements.whGrid.innerHTML = '';
+    
+    const questionTypes = ["Who", "What", "When", "Where", "Why", "How"];
+    
+    questionTypes.forEach((type, index) => {
+        const block = document.createElement('div');
+        block.className = 'wh-block';
+        
+        block.innerHTML = `
+            <div class="wh-content">
+                <h3 class="wh-title">${type}</h3>
+                <p class="wh-answer">${answers[type] || `No ${type.toLowerCase()} information available`}</p>
+            </div>
+            <div class="wh-footer">
+                <button class="more-btn"><i class="fas fa-info-circle"></i> Details</button>
+                <button class="copy-btn"><i class="far fa-copy"></i> Copy</button>
+            </div>
+        `;
+        
+        elements.whGrid.appendChild(block);
+        
+        setTimeout(() => {
+            block.classList.add('visible');
+        }, 100 * index);
+        
+        // Add button handlers
+        block.querySelector('.more-btn').addEventListener('click', () => {
+            alert(`${type}:\n\n${answers[type]}`);
+        });
+        
+        block.querySelector('.copy-btn').addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(`${type}: ${answers[type]}`);
+                const btn = block.querySelector('.copy-btn');
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="far fa-copy"></i> Copy';
+                    btn.classList.remove('copied');
+                }, 2000);
+            } catch {
+                alert("Failed to copy");
+            }
+        });
     });
 }
 
-function showUserProfile(user) {
-    // Update avatar button
-    if (user.photoURL) {
-        elements.authBtnContent.innerHTML = `
-            <img src="${user.photoURL}" class="user-avatar-img" alt="Profile" style="width:32px;height:32px;border-radius:50%;">
-        `;
-    } else {
-        elements.authBtnContent.innerHTML = `
-            <div class="avatar-placeholder" style="width:32px;height:32px;border-radius:50%;background-color:${stringToColor(user.email)};color:white;display:flex;align-items:center;justify-content:center;">
-                ${user.email.charAt(0).toUpperCase()}
-            </div>
-        `;
-    }
-    
-    // Update dropdown
-    elements.preLogin.style.display = 'none';
-    elements.signupForm.style.display = 'none';
-    elements.postLogin.style.display = 'block';
-    
-    elements.usernameDisplay.textContent = user.displayName || user.email.split('@')[0];
-    elements.userEmail.textContent = user.email;
-}
-
-function stringToColor(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const hue = Math.abs(hash % 360);
-    return `hsl(${hue}, 70%, 60%)`;
-}
-
-function showAuthForm() {
-    elements.authBtnContent.innerHTML = `<i class="fas fa-user-circle"></i>`;
-    elements.preLogin.style.display = 'block';
-    elements.signupForm.style.display = 'none';
-    elements.postLogin.style.display = 'none';
-    clearAuthForms();
-}
-
-function clearAuthForms() {
-    elements.authEmail.value = '';
-    elements.authPassword.value = '';
-    elements.signupName.value = '';
-    elements.signupEmail.value = '';
-    elements.signupPassword.value = '';
-}
-
-// Auth Functions
-function signInWithGoogle() {
-    auth.signInWithPopup(provider)
-        .then(() => {
-            elements.authDropdown.classList.remove('show');
-        })
-        .catch(error => {
-            console.error("Google sign-in failed:", error);
-            alert(`Google sign-in failed: ${error.message}`);
-        });
-}
-
-function signInWithEmail() {
-    const email = elements.authEmail.value;
-    const password = elements.authPassword.value;
-    
-    if (!email || !password) {
-        alert("Please enter both email and password");
-        return;
-    }
-    
-    auth.signInWithEmailAndPassword(email, password)
-        .then(() => {
-            elements.authDropdown.classList.remove('show');
-        })
-        .catch(error => {
-            console.error("Sign in failed:", error);
-            alert(`Sign in failed: ${error.message}`);
-        });
-}
-
-function signUpWithEmail() {
-    const name = elements.signupName.value;
-    const email = elements.signupEmail.value;
-    const password = elements.signupPassword.value;
-    
-    if (!name || !email || !password) {
-        alert("Please fill in all fields");
-        return;
-    }
-    
-    if (password.length < 6) {
-        alert("Password should be at least 6 characters");
-        return;
-    }
-    
-    auth.createUserWithEmailAndPassword(email, password)
-        .then((userCredential) => {
-            // Update user profile
-            return userCredential.user.updateProfile({
-                displayName: name
-            });
-        })
-        .then(() => {
-            elements.authDropdown.classList.remove('show');
-            // Initialize user history
-            return db.collection('userHistory').doc(auth.currentUser.uid).set({
-                searches: []
-            });
-        })
-        .catch(error => {
-            console.error("Sign up failed:", error);
-            alert(`Sign up failed: ${error.message}`);
-        });
-}
-
-function signOut() {
-    auth.signOut()
-        .then(() => {
-            elements.authDropdown.classList.remove('show');
-        })
-        .catch(error => {
-            console.error("Sign out failed:", error);
-        });
-}
-
-// History Management
-async function loadUserHistory(userId) {
-    try {
-        const doc = await db.collection('userHistory').doc(userId).get();
-        searchHistory = doc.exists ? doc.data().searches || [] : [];
-        updateSearchHistoryUI();
-    } catch (error) {
-        console.error("Error loading history:", error);
-        searchHistory = [];
-    }
-}
-
-function loadLocalHistory() {
-    searchHistory = JSON.parse(localStorage.getItem('localHistory')) || [];
-    updateSearchHistoryUI();
-}
-
-async function saveHistory() {
-    try {
-        if (currentUser) {
-            await db.collection('userHistory').doc(currentUser.uid).set({
-                searches: searchHistory.slice(0, 10) // Keep only last 10
-            });
-        } else {
-            localStorage.setItem('localHistory', JSON.stringify(searchHistory.slice(0, 10)));
-        }
-    } catch (error) {
-        console.error("Error saving history:", error);
-    }
-}
-
+// Search History
 function updateSearchHistory(query) {
     if (!query) return;
     
@@ -262,11 +234,7 @@ function updateSearchHistoryUI() {
     elements.historyItems.innerHTML = searchHistory.map(term => `
         <div class="history-item" data-term="${term}">
             <span class="history-term">${term}</span>
-            <div class="history-actions">
-                <button class="delete-history" aria-label="Delete">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
+            <button class="delete-history"><i class="fas fa-times"></i></button>
         </div>
     `).join('');
     
@@ -292,102 +260,41 @@ function deleteSearchTerm(term) {
     if (index > -1) {
         searchHistory.splice(index, 1);
         saveHistory();
-        
-        // Animate removal
-        const item = document.querySelector(`.history-item[data-term="${term}"]`);
-        if (item) {
-            item.style.transform = 'translateX(100%)';
-            item.style.opacity = '0';
-            setTimeout(() => updateSearchHistoryUI(), 300);
-        }
+        updateSearchHistoryUI();
     }
 }
 
-function clearAllHistory() {
-    if (searchHistory.length === 0 || !confirm('Clear all search history?')) return;
-    
-    // Animate all items out
-    const items = document.querySelectorAll('.history-item');
-    items.forEach((item, i) => {
-        item.style.transform = 'translateX(100%)';
-        item.style.opacity = '0';
-        item.style.transitionDelay = `${i * 50}ms`;
-    });
-    
-    // Clear data
-    searchHistory = [];
-    if (currentUser) {
-        db.collection('userHistory').doc(currentUser.uid).delete();
-    } else {
-        localStorage.removeItem('localHistory');
-    }
-    
-    setTimeout(() => updateSearchHistoryUI(), 300 + (items.length * 50));
+function saveHistory() {
+    localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
 }
 
-// Search Functionality
-async function performSearch() {
-    const query = elements.searchInput.value.trim();
-    if (!query) return;
-
-    updateSearchHistory(query);
-    showLoadingState(query);
-
-    try {
-        // Your existing search implementation
-        // ...
-    } catch (error) {
-        console.error("Search error:", error);
-        showError("Failed to get answers. Please try again.");
-    }
+function loadLocalHistory() {
+    searchHistory = JSON.parse(localStorage.getItem('searchHistory')) || [];
+    updateSearchHistoryUI();
 }
 
-// Event Listeners
-function setupEventListeners() {
-    // Auth Button
-    elements.authBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        elements.authDropdown.classList.toggle('show');
-    });
-    
-    // Auth Actions
-    elements.googleLogin.addEventListener('click', signInWithGoogle);
-    elements.emailLogin.addEventListener('click', signInWithEmail);
-    elements.doSignup.addEventListener('click', signUpWithEmail);
-    elements.signoutBtn.addEventListener('click', signOut);
-    
-    // Form Toggles
-    elements.signupToggle.addEventListener('click', () => {
-        elements.preLogin.style.display = 'none';
-        elements.signupForm.style.display = 'block';
-    });
-    
-    elements.loginToggle.addEventListener('click', () => {
-        elements.signupForm.style.display = 'none';
-        elements.preLogin.style.display = 'block';
-    });
-    
-    // Search
-    elements.searchButton.addEventListener('click', performSearch);
-    elements.searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') performSearch();
-    });
-    
-    // History
-    elements.clearHistory.addEventListener('click', clearAllHistory);
-    
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.auth-container')) {
-            elements.authDropdown.classList.remove('show');
-        }
-    });
-    
-    // Prevent dropdown close when clicking inside
-    elements.authDropdown.addEventListener('click', (e) => {
-        e.stopPropagation();
-    });
+// UI States
+function showLoadingState(query) {
+    elements.whGrid.innerHTML = `
+        <div class="loading-state">
+            <i class="fas fa-spinner fa-spin"></i>
+            <h2>Finding answers about "${query}"</h2>
+        </div>
+    `;
+}
+
+function showError(message) {
+    elements.whGrid.innerHTML = `
+        <div class="error-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h2>${message}</h2>
+            <button onclick="performSearch()">Try Again</button>
+        </div>
+    `;
 }
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', init);
+
+// Make performSearch available globally
+window.performSearch = performSearch;
