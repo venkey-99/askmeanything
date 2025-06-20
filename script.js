@@ -5,6 +5,7 @@ const CONFIG = {
     },
     openai: {
         endpoint: 'https://api.openai.com/v1/chat/completions',
+        apiKey: 'sk-proj-abc123...xyz', // Your real key
         model: 'gpt-3.5-turbo',
         maxTokens: 150
     },
