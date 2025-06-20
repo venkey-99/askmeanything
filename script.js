@@ -163,12 +163,31 @@ function displayResults(query, answers) {
 }
 
 function showLoadingState(query) {
-    whGrid.innerHTML = `
-        <div class="loading-state">
-            <i class="fas fa-spinner fa-spin"></i>
-            <h2>Finding answers about "${query}"</h2>
-        </div>
+    whGrid.innerHTML = '';
+    
+    // Create 9 skeleton blocks
+    for (let i = 0; i < 9; i++) {
+        const block = document.createElement('div');
+        block.className = 'wh-block visible';
+        block.innerHTML = `
+            <div class="wh-content">
+                <h3 class="wh-title skeleton skeleton-title"></h3>
+                <p class="wh-answer skeleton skeleton-block"></p>
+                <p class="wh-answer skeleton skeleton-block"></p>
+                <p class="wh-answer skeleton skeleton-block" style="width:80%"></p>
+            </div>
+        `;
+        whGrid.appendChild(block);
+    }
+    
+    // Keep the loading message
+    const loadingMsg = document.createElement('div');
+    loadingMsg.className = 'loading-state';
+    loadingMsg.innerHTML = `
+        <i class="fas fa-spinner fa-spin"></i>
+        <h2>Finding answers about "${query}"</h2>
     `;
+    whGrid.appendChild(loadingMsg);
 }
 
 function showError(message) {
