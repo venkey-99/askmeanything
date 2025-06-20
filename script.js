@@ -21,6 +21,12 @@ const searchHistory = JSON.parse(localStorage.getItem('whSearchHistory')) || [];
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('current-year').textContent = new Date().getFullYear();
+    document.addEventListener('DOMContentLoaded', function() {
+    // ... all your existing code ...
+    
+    // Add this at the end
+    updateSearchHistoryUI();
+});
     
     // Event listeners
     searchInput.addEventListener('keypress', function(e) {
