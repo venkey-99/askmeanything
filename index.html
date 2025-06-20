@@ -13,30 +13,65 @@
 </head>
 <body>
     <header>
-        <div class="auth-container">
-            <button id="auth-btn" class="auth-btn">
-                <i class="fas fa-user"></i> Sign In
-            </button>
-            <div id="auth-dropdown" class="auth-dropdown">
-                <div id="auth-form">
-                    <h3>Account</h3>
-                    <input type="email" id="auth-email" placeholder="Email">
-                    <input type="password" id="auth-password" placeholder="Password">
-                    <div class="auth-actions">
-                        <button id="signin-btn">Sign In</button>
-                        <button id="signup-btn">Sign Up</button>
-                    </div>
-                </div>
-                <div id="user-profile" style="display: none;">
-                    <h3>Welcome, <span id="username-display"></span></h3>
-                    <button id="signout-btn">Sign Out</button>
-                </div>
-            </div>
-        </div>
-        
         <div class="header-content">
             <h1>Ask Me</h1>
             <p>Get comprehensive answers to WH-questions</p>
+        </div>
+        
+        <!-- YouTube-style Auth Button -->
+        <div class="auth-container">
+            <button id="auth-btn" class="auth-btn">
+                <div id="auth-btn-content">
+                    <i class="fas fa-user-circle"></i>
+                </div>
+            </button>
+            
+            <div id="auth-dropdown" class="auth-dropdown">
+                <!-- Before Login -->
+                <div id="pre-login" class="auth-section">
+                    <h3>Sign in</h3>
+                    <p>To save your search history</p>
+                    <button id="google-login" class="auth-provider-btn">
+                        <i class="fab fa-google"></i> Sign in with Google
+                    </button>
+                    <div class="auth-divider">
+                        <span>or</span>
+                    </div>
+                    <input type="email" id="auth-email" placeholder="Email">
+                    <input type="password" id="auth-password" placeholder="Password">
+                    <button id="email-login" class="auth-primary-btn">Sign In</button>
+                    <button id="signup-toggle" class="auth-secondary-btn">Create account</button>
+                </div>
+                
+                <!-- Sign Up Form (Hidden by default) -->
+                <div id="signup-form" class="auth-section" style="display: none;">
+                    <h3>Create your account</h3>
+                    <input type="text" id="signup-name" placeholder="Name">
+                    <input type="email" id="signup-email" placeholder="Email">
+                    <input type="password" id="signup-password" placeholder="Password">
+                    <button id="do-signup" class="auth-primary-btn">Sign Up</button>
+                    <button id="login-toggle" class="auth-secondary-btn">Already have an account? Sign in</button>
+                </div>
+                
+                <!-- After Login -->
+                <div id="post-login" class="auth-section" style="display: none;">
+                    <div class="user-profile">
+                        <div class="user-avatar">
+                            <i class="fas fa-user-circle"></i>
+                        </div>
+                        <div class="user-info">
+                            <span id="username-display">User Name</span>
+                            <span id="user-email">user@example.com</span>
+                        </div>
+                    </div>
+                    <button id="manage-account" class="auth-menu-btn">
+                        <i class="fas fa-user-cog"></i> Manage Account
+                    </button>
+                    <button id="signout-btn" class="auth-menu-btn">
+                        <i class="fas fa-sign-out-alt"></i> Sign Out
+                    </button>
+                </div>
+            </div>
         </div>
     </header>
     
