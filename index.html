@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ask Me - WH Explorer</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>Ask Me</h1>
+            <p>Get comprehensive answers to WH-questions</p>
+        </div>
+        
+        <!-- YouTube-style Auth Button -->
+        <div class="auth-container">
+            <button id="auth-btn" class="auth-btn">
+                <div id="auth-btn-content">
+                    <i class="fas fa-user-circle"></i>
+                </div>
+            </button>
+            
+            <div id="auth-dropdown" class="auth-dropdown">
+                <!-- Before Login -->
+                <div id="pre-login" class="auth-section">
+                    <h3>Sign in</h3>
+                    <p>To save your search history</p>
+                    <button id="google-login" class="auth-provider-btn">
+                        <i class="fab fa-google"></i> Sign in with Google
+                    </button>
+                    <div class="auth-divider">
+                        <span>or</span>
+                    </div>
+                    <input type="email" id="auth-email" placeholder="Email">
+                    <input type="password" id="auth-password" placeholder="Password">
+                    <button id="email-login" class="auth-primary-btn">Sign In</button>
+                    <button id="signup-toggle" class="auth-secondary-btn">Create account</button>
+                </div>
+                
+                <!-- Sign Up Form (Hidden by default) -->
+                <div id="signup-form" class="auth-section" style="display: none;">
+                    <h3>Create your account</h3>
+                    <input type="text" id="signup-name" placeholder="Name">
+                    <input type="email" id="signup-email" placeholder="Email">
+                    <input type="password" id="signup-password" placeholder="Password">
+                    <button id="do-signup" class="auth-primary-btn">Sign Up</button>
+                    <button id="login-toggle" class="auth-secondary-btn">Already have an account? Sign in</button>
+                </div>
+                
+                <!-- After Login -->
+                <div id="post-login" class="auth-section" style="display: none;">
+                    <div class="user-profile">
+                        <div class="user-avatar">
+                            <i class="fas fa-user-circle"></i>
+                        </div>
+                        <div class="user-info">
+                            <span id="username-display">User Name</span>
+                            <span id="user-email">user@example.com</span>
+                        </div>
+                    </div>
+                    <button id="manage-account" class="auth-menu-btn">
+                        <i class="fas fa-user-cog"></i> Manage Account
+                    </button>
+                    <button id="signout-btn" class="auth-menu-btn">
+                        <i class="fas fa-sign-out-alt"></i> Sign Out
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <main>
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Ask anything (e.g., climate change, quantum computing)" autofocus>
+            <button id="search-button"><i class="fas fa-search"></i> Search</button>
+            
+            <div id="search-history">
+                <h3><i class="fas fa-history"></i> Recent Searches</h3>
+                <div id="history-items"></div>
+                <button id="clear-history" class="clear-history-btn">
+                    <i class="fas fa-trash-alt"></i> Clear All
+                </button>
+            </div>
+        </div>
+        
+        <div class="wh-grid" id="wh-grid">
+            <div class="initial-state">
+                <i class="fas fa-question-circle"></i>
+                <h2>Explore WH-questions</h2>
+                <p>Enter a topic to see comprehensive answers</p>
+            </div>
+        </div>
+    </main>
+    
+    <footer>
+        <p>&copy; <span id="current-year"></span> Ask Me WH Explorer. All rights reserved.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
