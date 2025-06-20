@@ -15,6 +15,7 @@ const CONFIG = {
 const searchInput = document.getElementById('search-input');
 const searchButton = document.getElementById('search-button');
 const whGrid = document.getElementById('wh-grid');
+let lastSearchTime = 0;
 // Add with your other variable declarations at the top
 const searchHistory = JSON.parse(localStorage.getItem('whSearchHistory')) || [];
 
