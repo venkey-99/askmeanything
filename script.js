@@ -23,7 +23,7 @@ const CONFIG = {
     },
     openai: {
         endpoint: 'https://api.openai.com/v1/chat/completions',
-        apiKey: 'sk-your-actual-openai-key-here', // REPLACE WITH YOUR KEY
+        apiKey: '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', // REPLACE WITH YOUR KEY
         model: 'gpt-3.5-turbo',
         maxTokens: 500
     },
