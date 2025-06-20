@@ -15,6 +15,8 @@ const CONFIG = {
 const searchInput = document.getElementById('search-input');
 const searchButton = document.getElementById('search-button');
 const whGrid = document.getElementById('wh-grid');
+// Add with your other variable declarations at the top
+const searchHistory = JSON.parse(localStorage.getItem('whSearchHistory')) || [];
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
@@ -135,7 +137,32 @@ function displayResults(query, answers) {
             block.classList.add('visible');
         }, 100 * index);
     });
+    async function performSearch() {
+    const query = searchInput.value.trim();
+    if (!query) return;
+
+    // Add to history (add these lines)
+    if (!searchHistory.includes(query)) {
+        searchHistory.unshift(query);
+        localStorage.setItem('whSearchHistory', JSON.stringify(searchHistory));
+        updateSearchHistoryUI();
+    }
     
+    // Rest of your existing performSearch code...
+}
+    function updateSearchHistoryUI() {
+    const historyContainer = document.getElementById('search-history');
+    historyContainer.innerHTML = `
+        <h3>Recent Searches</h3>
+        <ul>
+            ${searchHistory.slice(0, 5).map(term => `
+                <li onclick="document.getElementById('search-input').value='${term}';performSearch()">
+                    ${term}
+                </li>
+            `).join('')}
+        </ul>
+    `;
+}
     // Add event listeners
     document.querySelectorAll('.more-btn').forEach(btn => {
         btn.addEventListener('click', function() {
